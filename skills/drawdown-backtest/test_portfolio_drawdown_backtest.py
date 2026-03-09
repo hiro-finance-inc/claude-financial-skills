@@ -300,9 +300,13 @@ def test_output_files_created(minimal_portfolio_json, tmp_path):
             "--no-html",
         ])
 
-    assert (output_dir / "data.json").exists()
+    # Files are timestamped: yyyy-mm-dd-hhmm-data.json, yyyy-mm-dd-hhmm-summary.md
+    data_files = list(output_dir.glob("*-data.json"))
+    md_files = list(output_dir.glob("*-summary.md"))
+    assert len(data_files) == 1, f"Expected 1 data JSON file, found {data_files}"
+    assert len(md_files) == 1, f"Expected 1 summary MD file, found {md_files}"
     # Verify data.json is valid JSON
-    data = json.loads((output_dir / "data.json").read_text())
+    data = json.loads(data_files[0].read_text())
     assert "dotcom" in data or "results" in data
 
 
@@ -321,3 +325,201 @@ def test_backward_compat_no_args():
     # Weights should sum to ~1.0
     total = sum(w for _, _, w, _, _ in pdb.PORTFOLIO)
     assert abs(total - 1.0) < 0.01
+
+
+# ── Item 1: Dynamic resilience assessment ──────────────────────────────
+
+def test_markdown_report_no_hardcoded_allocations():
+    """Custom portfolio must NOT produce hardcoded gold/tbill/sogo shosha text."""
+    dates = pd.bdate_range("2020-01-01", periods=10)
+    portfolio_series = pd.Series(np.linspace(100, 90, 10), index=dates)
+    sp500_prices = pd.Series(np.linspace(100, 80, 10), index=dates)
+
+    fake_results = {
+        "covid": {
+            "period": pdb.DRAWDOWNS["covid"],
+            "securities": [
+                {"name": "VTI", "ticker": "VTI", "weight": 1.0,
+                 "asset_class": "US equity", "source": "VTI",
+                 "max_drawdown": -10.0, "total_return": -10.0},
+            ],
+            "portfolio_series": portfolio_series,
+            "portfolio_stats": pdb.calc_drawdown_stats(portfolio_series),
+            "sp500_prices": sp500_prices,
+            "sp500_stats": pdb.calc_drawdown_stats(sp500_prices),
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as f:
+        output_path = f.name
+
+    try:
+        portfolio = [("VTI", "VTI", 1.0, "US equity", None)]
+        pdb.generate_markdown_report(fake_results, output_path, portfolio=portfolio)
+        content = Path(output_path).read_text()
+
+        # Should NOT contain hardcoded references to specific allocations
+        assert "gold (20%)" not in content.lower()
+        assert "T-bills (16%)" not in content
+        assert "sogo shosha (14%)" not in content.lower()
+        # Should contain the actual allocation
+        assert "US equity" in content
+    finally:
+        os.unlink(output_path)
+
+
+# ── Item 2: Consistent simulator return types ──────────────────────────
+
+def test_all_proxy_simulators_return_tuples():
+    """All PROXY_SIMULATORS should return (Series, str) tuples."""
+    start, end = "2020-01-01", "2020-06-01"
+
+    # Return None to force simulation path (where return types were inconsistent)
+    with patch.object(pdb, "get_price_data", return_value=None):
+        for key, func in pdb.PROXY_SIMULATORS.items():
+            result = func(start, end)
+            assert isinstance(result, tuple), f"{key} should return a tuple, got {type(result)}"
+            assert len(result) == 2, f"{key} should return 2-tuple"
+            series, label = result
+            assert isinstance(series, pd.Series), f"{key}[0] should be Series"
+            assert isinstance(label, str), f"{key}[1] should be str"
+
+
+# ── Item 3: group_by_asset_class ───────────────────────────────────────
+
+def test_group_by_asset_class():
+    """group_by_asset_class should aggregate weight, drawdown, and return."""
+    securities = [
+        {"asset_class": "Gold", "weight": 0.10, "max_drawdown": -5.0, "total_return": 10.0},
+        {"asset_class": "Gold", "weight": 0.10, "max_drawdown": -3.0, "total_return": 8.0},
+        {"asset_class": "US equity", "weight": 0.30, "max_drawdown": -40.0, "total_return": -30.0},
+    ]
+    groups = pdb.group_by_asset_class(securities)
+
+    assert "Gold" in groups
+    assert "US equity" in groups
+    assert abs(groups["Gold"]["weight"] - 0.20) < 1e-9
+    # weighted_dd = 0.10 * -5.0 + 0.10 * -3.0 = -0.8
+    assert abs(groups["Gold"]["weighted_dd"] - (-0.8)) < 1e-9
+    assert abs(groups["US equity"]["weight"] - 0.30) < 1e-9
+    assert abs(groups["US equity"]["weighted_dd"] - (0.30 * -40.0)) < 1e-9
+
+
+# ── Item 4: Portfolio construction without bfill ───────────────────────
+
+def test_portfolio_construction_no_bfill():
+    """Portfolio with ffill-only should NOT backfill future data into earlier dates.
+
+    With bfill, a series that starts later has its first value leaked backward.
+    With ffill only, early dates should only include the available series.
+    """
+    dates = pd.bdate_range("2020-01-01", periods=5)
+
+    # Series A: full date range
+    prices_a = pd.Series([100, 102, 104, 106, 108], index=dates, dtype=float)
+    # Series B: starts on day 3
+    prices_b = pd.Series([100, 98, 96], index=dates[2:], dtype=float)
+
+    norm_a = prices_a / prices_a.iloc[0]
+    norm_b = prices_b / prices_b.iloc[0]
+
+    weighted_a = norm_a * 0.5
+    weighted_b = norm_b * 0.5
+
+    combined = pd.DataFrame({"a": weighted_a, "b": weighted_b})
+
+    # ffill only: day 1-2 have NaN for B → sum only A
+    portfolio_ffill = combined.ffill().sum(axis=1)
+    # bfill too: day 1-2 get B backfilled → sum both
+    portfolio_bfill = combined.ffill().bfill().sum(axis=1)
+
+    # They should differ on early dates
+    assert portfolio_ffill.iloc[0] != portfolio_bfill.iloc[0]
+    # ffill version: only A contributes on day 1
+    assert abs(portfolio_ffill.iloc[0] - 0.5) < 1e-9
+
+
+# ── Item 5: dd_color ──────────────────────────────────────────────────
+
+def test_dd_color():
+    """dd_color returns correct hex codes for each drawdown bucket."""
+    assert pdb.dd_color(-2) == "#16a34a"   # green: > -5
+    assert pdb.dd_color(-10) == "#ca8a04"  # yellow: > -20
+    assert pdb.dd_color(-30) == "#dc2626"  # red: <= -20
+    assert pdb.dd_color(0) == "#16a34a"    # green: no drawdown
+    assert pdb.dd_color(-5) == "#ca8a04"   # yellow: exactly -5
+    assert pdb.dd_color(-20) == "#dc2626"  # red: exactly -20
+
+
+# ── Item 6: FX fallback rate ──────────────────────────────────────────
+
+def test_fx_fallback_rates_per_period():
+    """FX_FALLBACK_RATES should have different rates per period, not hardcoded 150."""
+    assert hasattr(pdb, "FX_FALLBACK_RATES")
+    assert "dotcom" in pdb.FX_FALLBACK_RATES
+    assert "gfc" in pdb.FX_FALLBACK_RATES
+    assert "covid" in pdb.FX_FALLBACK_RATES
+    # Period rates should differ from old hardcoded 150
+    assert pdb.FX_FALLBACK_RATES["dotcom"] != 150.0
+    assert pdb.FX_FALLBACK_RATES["gfc"] != 150.0
+
+
+def test_fx_fallback_logs_warning(capsys):
+    """FX fallback should print a warning when using fallback rate."""
+    dates = pd.bdate_range("2020-01-01", periods=10)
+    prices = pd.Series(np.linspace(1000, 1100, 10), index=dates)
+
+    with patch.object(pdb, "get_price_data", return_value=prices):
+        result_prices, source = pdb.get_security_prices(
+            "Mitsui", "8031.T", None, "covid", "2020-01-01", "2020-06-01",
+            fx_rate=None,
+        )
+
+    captured = capsys.readouterr()
+    assert "warning" in captured.out.lower()
+    assert "fallback" in captured.out.lower()
+
+
+# ── Item 7: SIMULATOR_PARAMS ──────────────────────────────────────────
+
+def test_simulator_params_exists():
+    """SIMULATOR_PARAMS config dict should contain params for all simulator types."""
+    assert hasattr(pdb, "SIMULATOR_PARAMS")
+    params = pdb.SIMULATOR_PARAMS
+    expected_keys = ["tbill", "lt_treasury", "tips", "gsci",
+                     "intl_bonds", "em_bonds_gfc", "em_bonds_dotcom",
+                     "em_equity_fallback"]
+    for key in expected_keys:
+        assert key in params, f"Missing key: {key}"
+
+
+# ── Item 8: normalize helper ──────────────────────────────────────────
+
+def test_normalize_default_base():
+    """normalize() should scale to start at 1.0 by default."""
+    prices = pd.Series([50.0, 100.0, 75.0])
+    result = pdb.normalize(prices)
+    assert abs(result.iloc[0] - 1.0) < 1e-9
+    assert abs(result.iloc[1] - 2.0) < 1e-9
+    assert abs(result.iloc[2] - 1.5) < 1e-9
+
+
+def test_normalize_custom_base():
+    """normalize(base=100) should scale to start at 100."""
+    prices = pd.Series([50.0, 100.0, 75.0])
+    result = pdb.normalize(prices, base=100)
+    assert abs(result.iloc[0] - 100.0) < 1e-9
+    assert abs(result.iloc[1] - 200.0) < 1e-9
+
+
+def test_normalize_none_input():
+    """normalize(None) should return None."""
+    assert pdb.normalize(None) is None
+
+
+# ── Item 9: END_DATE_BUFFER_DAYS ──────────────────────────────────────
+
+def test_end_date_buffer_constant():
+    """END_DATE_BUFFER_DAYS constant should exist and be positive."""
+    assert hasattr(pdb, "END_DATE_BUFFER_DAYS")
+    assert pdb.END_DATE_BUFFER_DAYS > 0

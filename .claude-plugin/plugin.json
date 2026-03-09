@@ -1,7 +1,7 @@
 {
   "name": "claude-financial-skills",
   "version": "1.0.0",
-  "description": "Financial analysis skills powered by the Hiro Finance MCP server. Includes credit card optimization and portfolio drawdown backtesting.",
+  "description": "Financial analysis skills powered by the Hiro Finance. Includes credit card optimization and portfolio drawdown backtesting.",
   "author": {
     "name": "Hiro Finance"
   },

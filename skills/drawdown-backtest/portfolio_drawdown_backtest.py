@@ -98,6 +98,67 @@ DRAWDOWNS = {
     },
 }
 
+# ── Constants ─────────────────────────────────────────────────────────
+
+END_DATE_BUFFER_DAYS = 5
+
+FX_FALLBACK_RATES = {
+    "dotcom": 110.0,   # ~110 JPY/USD during 2000-2003
+    "gfc": 100.0,      # ~90-110 JPY/USD during 2007-2009
+    "covid": 108.0,    # ~105-110 JPY/USD during 2020
+}
+FX_FALLBACK_DEFAULT = 150.0
+
+SIMULATOR_PARAMS = {
+    "tbill": {
+        "vol": 0.003,
+        "rates": {2020: 0.01, 2007: 0.03, "default": 0.04},
+    },
+    "lt_treasury": {"return": 0.10, "vol": 0.10},
+    "tips": {"return": 0.08, "vol": 0.06},
+    "gsci": {"return": -0.10, "vol": 0.25},
+    "intl_bonds": {"return": 0.05, "vol": 0.07},
+    "em_bonds_gfc": {"return": -0.12, "vol": 0.15},
+    "em_bonds_dotcom": {"return": 0.02, "vol": 0.12},
+    "em_equity_fallback": {"return": -0.15, "vol": 0.25},
+}
+
+# ── Helpers ───────────────────────────────────────────────────────────
+
+
+def normalize(prices, base=1.0):
+    """Normalize a price series to start at `base`."""
+    if prices is None or len(prices) == 0:
+        return prices
+    return prices / prices.iloc[0] * base
+
+
+def dd_color(value):
+    """Return hex color for a drawdown value: green (>-5%), yellow (>-20%), red."""
+    if value > -5:
+        return "#16a34a"
+    elif value > -20:
+        return "#ca8a04"
+    else:
+        return "#dc2626"
+
+
+def group_by_asset_class(securities):
+    """Group securities by asset class with aggregate weight, weighted drawdown, and weighted return.
+
+    Returns: dict {asset_class: {"weight": float, "weighted_dd": float, "weighted_ret": float}}
+    """
+    groups = {}
+    for s in securities:
+        ac = s["asset_class"]
+        if ac not in groups:
+            groups[ac] = {"weight": 0, "weighted_dd": 0, "weighted_ret": 0}
+        groups[ac]["weight"] += s["weight"]
+        groups[ac]["weighted_dd"] += s["weight"] * s["max_drawdown"]
+        groups[ac]["weighted_ret"] += s["weight"] * s["total_return"]
+    return groups
+
+
 # ── Portfolio JSON loading ────────────────────────────────────────────
 
 def load_portfolio_from_json(path: str) -> list:
@@ -168,7 +229,7 @@ def get_price_data(ticker: str, start: str, end: str) -> pd.Series | None:
     """Fetch adjusted close prices for a ticker."""
     try:
         # Extend end date by a few days to ensure we capture the full period
-        end_dt = pd.Timestamp(end) + pd.Timedelta(days=5)
+        end_dt = pd.Timestamp(end) + pd.Timedelta(days=END_DATE_BUFFER_DAYS)
         df = yf.download(ticker, start=start, end=end_dt.strftime("%Y-%m-%d"),
                          progress=False, auto_adjust=True)
         if df.empty:
@@ -186,7 +247,7 @@ def get_price_data(ticker: str, start: str, end: str) -> pd.Series | None:
 
 def get_fx_rate(start: str, end: str) -> pd.Series:
     """Fetch JPY/USD exchange rate."""
-    end_dt = pd.Timestamp(end) + pd.Timedelta(days=5)
+    end_dt = pd.Timestamp(end) + pd.Timedelta(days=END_DATE_BUFFER_DAYS)
     df = yf.download("JPYUSD=X", start=start, end=end_dt.strftime("%Y-%m-%d"),
                      progress=False, auto_adjust=True)
     if df.empty:
@@ -228,74 +289,70 @@ def simulate_with_volatility(start: str, end: str, annual_return: float,
     return prices
 
 
-def simulate_tbill_returns(start: str, end: str) -> pd.Series:
+def simulate_tbill_returns(start: str, end: str) -> tuple[pd.Series, str]:
     """T-bills: near-zero drawdown, very low vol. Try SHV/BIL first."""
-    prices, _ = try_tickers(["SHV", "BIL"], start, end)
+    prices, ticker = try_tickers(["SHV", "BIL"], start, end)
     if prices is not None:
-        return prices
+        return prices, ticker
     year = int(start[:4])
+    params = SIMULATOR_PARAMS["tbill"]
     if year >= 2020:
-        annual_rate = 0.01
+        annual_rate = params["rates"][2020]
     elif year >= 2007:
-        annual_rate = 0.03
+        annual_rate = params["rates"][2007]
     else:
-        annual_rate = 0.04
-    # T-bills have ~0.3% annual vol — essentially no drawdown
-    return simulate_with_volatility(start, end, annual_rate, 0.003, seed=1)
+        annual_rate = params["rates"]["default"]
+    return simulate_with_volatility(start, end, annual_rate, params["vol"], seed=1), "Simulated (T-bill)"
 
 
-def simulate_lt_treasury(start: str, end: str) -> pd.Series | None:
+def simulate_lt_treasury(start: str, end: str) -> tuple[pd.Series, str]:
     """Long treasuries. Try TLT (2002), else simulate with bond-like vol."""
-    prices, _ = try_tickers(["TLT"], start, end)
+    prices, ticker = try_tickers(["TLT"], start, end)
     if prices is not None:
-        return prices
-    # Dot-com era: long treasuries rallied ~30% over 3 years as rates fell
-    # but had ~10% annual volatility (duration risk)
-    return simulate_with_volatility(start, end, 0.10, 0.10, seed=2)
+        return prices, ticker
+    p = SIMULATOR_PARAMS["lt_treasury"]
+    return simulate_with_volatility(start, end, p["return"], p["vol"], seed=2), "Simulated (LT Treasury)"
 
 
-def simulate_tips(start: str, end: str) -> pd.Series | None:
+def simulate_tips(start: str, end: str) -> tuple[pd.Series, str]:
     """TIPS. Try TIP ETF (2003), else simulate."""
-    prices, _ = try_tickers(["TIP"], start, end)
+    prices, ticker = try_tickers(["TIP"], start, end)
     if prices is not None:
-        return prices
-    # Dot-com: TIPS returned ~8% annually with ~6% vol
-    # Had a ~5% drawdown during the initial equity sell-off
-    return simulate_with_volatility(start, end, 0.08, 0.06, seed=3)
+        return prices, ticker
+    p = SIMULATOR_PARAMS["tips"]
+    return simulate_with_volatility(start, end, p["return"], p["vol"], seed=3), "Simulated (TIPS)"
 
 
-def simulate_gsci(start: str, end: str) -> pd.Series | None:
+def simulate_gsci(start: str, end: str) -> tuple[pd.Series, str]:
     """Commodity index proxy. Try crude oil futures, then DJP."""
-    prices, _ = try_tickers(["CL=F", "DJP"], start, end)
+    prices, ticker = try_tickers(["CL=F", "DJP"], start, end)
     if prices is not None:
-        return prices
-    # Commodities: high vol (~25%), fell during dot-com recession
-    return simulate_with_volatility(start, end, -0.10, 0.25, seed=4)
+        return prices, ticker
+    p = SIMULATOR_PARAMS["gsci"]
+    return simulate_with_volatility(start, end, p["return"], p["vol"], seed=4), "Simulated (GSCI)"
 
 
-def simulate_intl_bonds(start: str, end: str) -> pd.Series | None:
+def simulate_intl_bonds(start: str, end: str) -> tuple[pd.Series, str]:
     """International government bonds. Try BWX (2007), IGOV, then simulate."""
-    prices, _ = try_tickers(["BWX", "IGOV"], start, end)
+    prices, ticker = try_tickers(["BWX", "IGOV"], start, end)
     if prices is not None:
-        return prices
-    # Intl govt bonds: moderate return, ~5-7% vol from currency + rate moves
-    # USD weakened during dot-com, boosting unhedged intl bond returns
-    return simulate_with_volatility(start, end, 0.05, 0.07, seed=5)
+        return prices, ticker
+    p = SIMULATOR_PARAMS["intl_bonds"]
+    return simulate_with_volatility(start, end, p["return"], p["vol"], seed=5), "Simulated (Intl bonds)"
 
 
-def simulate_em_bonds(start: str, end: str) -> pd.Series | None:
+def simulate_em_bonds(start: str, end: str) -> tuple[pd.Series, str]:
     """EM bonds. Try EMB (2007), PCY, VWOB, then simulate."""
-    prices, _ = try_tickers(["EMB", "PCY", "VWOB"], start, end)
+    prices, ticker = try_tickers(["EMB", "PCY", "VWOB"], start, end)
     if prices is not None:
-        return prices
+        return prices, ticker
     year = int(start[:4])
     if year >= 2007:
-        # GFC: EM bonds fell ~25% with high vol
-        return simulate_with_volatility(start, end, -0.12, 0.15, seed=6)
+        p = SIMULATOR_PARAMS["em_bonds_gfc"]
+        return simulate_with_volatility(start, end, p["return"], p["vol"], seed=6), "Simulated (EM bonds, GFC-era)"
     else:
-        # Dot-com: EM bonds were volatile — Argentina default 2001, Brazil 2002
-        # EMBI+ had ~-5% max DD from peak, but coupon income offset
-        return simulate_with_volatility(start, end, 0.02, 0.12, seed=7)
+        p = SIMULATOR_PARAMS["em_bonds_dotcom"]
+        return simulate_with_volatility(start, end, p["return"], p["vol"], seed=7), "Simulated (EM bonds, dot-com era)"
 
 
 def simulate_em_equity(start: str, end: str) -> pd.Series | None:
@@ -324,7 +381,8 @@ def simulate_em_equity(start: str, end: str) -> pd.Series | None:
         return basket, label
 
     # Fallback: simulate based on known MSCI EM performance
-    return simulate_with_volatility(start, end, -0.15, 0.25, seed=8), "Simulated (MSCI EM est.)"
+    p = SIMULATOR_PARAMS["em_equity_fallback"]
+    return simulate_with_volatility(start, end, p["return"], p["vol"], seed=8), "Simulated (MSCI EM est.)"
 
 
 PROXY_SIMULATORS = {
@@ -356,11 +414,7 @@ def get_security_prices(name: str, ticker: str, proxy_map: dict | None,
         return None, "N/A (did not exist)"
 
     if use_ticker in PROXY_SIMULATORS:
-        result = PROXY_SIMULATORS[use_ticker](start, end)
-        # Simulators may return (prices, label) tuple or just prices
-        if isinstance(result, tuple):
-            return result
-        return result, f"Simulated ({use_ticker.strip('_')})"
+        return PROXY_SIMULATORS[use_ticker](start, end)
 
     # Fetch actual prices
     prices = get_price_data(use_ticker, start, end)
@@ -378,9 +432,10 @@ def get_security_prices(name: str, ticker: str, proxy_map: dict | None,
             prices = prices.loc[common_dates] * fx_rate.loc[common_dates]
             source = f"{ticker} (JPY→USD)"
     elif is_jpy and use_ticker == ticker and fx_rate is None:
-        # If no FX data, approximate with a constant rate
-        prices = prices / 150.0
-        source = f"{ticker} (est. JPY→USD)"
+        rate = FX_FALLBACK_RATES.get(period_key, FX_FALLBACK_DEFAULT)
+        print(f"  Warning: No FX data for {ticker}, using fallback rate {rate} JPY/USD for {period_key} period")
+        prices = prices / rate
+        source = f"{ticker} (est. JPY→USD @{rate:.0f})"
 
     return prices, source
 
@@ -391,8 +446,7 @@ def calc_drawdown_stats(prices: pd.Series) -> dict:
         return {"max_drawdown": 0, "peak_date": None, "trough_date": None,
                 "recovery_date": None, "total_return": 0}
 
-    # Normalize to 100
-    norm = prices / prices.iloc[0] * 100
+    norm = normalize(prices, base=100)
 
     # Running maximum
     running_max = norm.cummax()
@@ -453,7 +507,7 @@ def run_backtest(portfolio: list = None, periods: list = None):
         sp500_stats = calc_drawdown_stats(sp500_prices)
 
         security_results = []
-        portfolio_series = None
+        all_weighted_series = []
 
         for name, ticker, weight, asset_class, proxy_map in portfolio:
             print(f"  Fetching {name} ({ticker})...")
@@ -469,19 +523,18 @@ def run_backtest(portfolio: list = None, periods: list = None):
             stats["source"] = source
 
             if prices is not None and len(prices) > 1:
-                # Normalize to 1.0
-                norm = prices / prices.iloc[0]
-
-                # Contribute to portfolio
-                if portfolio_series is None:
-                    portfolio_series = norm * weight
-                else:
-                    # Align dates and add
-                    combined = pd.DataFrame({"portfolio": portfolio_series, "new": norm * weight})
-                    combined = combined.ffill().bfill()
-                    portfolio_series = combined["portfolio"] + combined["new"]
+                norm = normalize(prices)
+                all_weighted_series.append(norm * weight)
 
             security_results.append(stats)
+
+        # Combine all series: align dates with ffill only (no bfill to avoid future data leakage)
+        if all_weighted_series:
+            combined = pd.DataFrame({f"s{i}": s for i, s in enumerate(all_weighted_series)})
+            combined = combined.ffill()
+            portfolio_series = combined.sum(axis=1)
+        else:
+            portfolio_series = None
 
         # Calculate portfolio-level stats
         portfolio_stats = calc_drawdown_stats(portfolio_series)
@@ -591,14 +644,13 @@ def generate_html_report(results: dict, output_path: str):
         secs = sorted(data["securities"], key=lambda s: s["max_drawdown"])
         rows_html = ""
         for s in secs:
-            dd_color = "#16a34a" if s["max_drawdown"] > -5 else (
-                "#ca8a04" if s["max_drawdown"] > -20 else "#dc2626")
+            color = dd_color(s["max_drawdown"])
             rows_html += f"""
             <tr>
                 <td>{s['name']}</td>
                 <td>{s['asset_class']}</td>
                 <td>{s['weight']*100:.1f}%</td>
-                <td style="color:{dd_color};font-weight:bold">{s['max_drawdown']:.1f}%</td>
+                <td style="color:{color};font-weight:bold">{s['max_drawdown']:.1f}%</td>
                 <td>{s['total_return']:.1f}%</td>
                 <td style="font-size:0.85em;color:#666">{s['source']}</td>
             </tr>"""
@@ -620,25 +672,17 @@ def generate_html_report(results: dict, output_path: str):
     for period_key, data in results.items():
         period = data["period"]
         secs = data["securities"]
-        # Group by asset class
-        ac_groups = {}
-        for s in secs:
-            ac = s["asset_class"]
-            if ac not in ac_groups:
-                ac_groups[ac] = {"weight": 0, "weighted_dd": 0, "weighted_ret": 0}
-            ac_groups[ac]["weight"] += s["weight"]
-            ac_groups[ac]["weighted_dd"] += s["weight"] * s["max_drawdown"]
-            ac_groups[ac]["weighted_ret"] += s["weight"] * s["total_return"]
+        ac_groups = group_by_asset_class(secs)
 
         rows_html = ""
         for ac, vals in sorted(ac_groups.items(), key=lambda x: x[1]["weighted_dd"]):
             avg_dd = vals["weighted_dd"] / vals["weight"] if vals["weight"] > 0 else 0
-            dd_color = "#16a34a" if avg_dd > -5 else ("#ca8a04" if avg_dd > -20 else "#dc2626")
+            color = dd_color(avg_dd)
             rows_html += f"""
             <tr>
                 <td>{ac}</td>
                 <td>{vals['weight']*100:.1f}%</td>
-                <td style="color:{dd_color};font-weight:bold">{avg_dd:.1f}%</td>
+                <td style="color:{color};font-weight:bold">{avg_dd:.1f}%</td>
                 <td>{vals['weighted_dd']:.2f}%</td>
             </tr>"""
 
@@ -765,7 +809,7 @@ class PlotlyEncoder(json.JSONEncoder):
 
 # ── Markdown Report ───────────────────────────────────────────────────
 
-def generate_markdown_report(results: dict, output_path: str):
+def generate_markdown_report(results: dict, output_path: str, portfolio: list = None):
     """Generate Obsidian-compatible markdown summary."""
 
     lines = [
@@ -816,37 +860,42 @@ def generate_markdown_report(results: dict, output_path: str):
             lines.append(f"- **Worst performer**: {worst['name']} ({worst['max_drawdown']:.1f}% max DD)")
 
         # Asset classes that helped
-        ac_dds = {}
-        for s in secs:
-            ac = s["asset_class"]
-            if ac not in ac_dds:
-                ac_dds[ac] = []
-            ac_dds[ac].append(s["max_drawdown"])
-        best_ac = max(ac_dds.items(), key=lambda x: np.mean(x[1]))
-        worst_ac = min(ac_dds.items(), key=lambda x: np.mean(x[1]))
-        lines.append(f"- **Best asset class**: {best_ac[0]} (avg {np.mean(best_ac[1]):.1f}% DD)")
-        lines.append(f"- **Worst asset class**: {worst_ac[0]} (avg {np.mean(worst_ac[1]):.1f}% DD)")
+        ac_groups = group_by_asset_class(secs)
+        ac_avg_dds = {ac: vals["weighted_dd"] / vals["weight"] if vals["weight"] > 0 else 0
+                      for ac, vals in ac_groups.items()}
+        best_ac = max(ac_avg_dds.items(), key=lambda x: x[1])
+        worst_ac = min(ac_avg_dds.items(), key=lambda x: x[1])
+        lines.append(f"- **Best asset class**: {best_ac[0]} (avg {best_ac[1]:.1f}% DD)")
+        lines.append(f"- **Worst asset class**: {worst_ac[0]} (avg {worst_ac[1]:.1f}% DD)")
         lines.append("")
+
+    # Dynamic resilience assessment based on actual portfolio
+    ac_weights = {}
+    if portfolio:
+        for name, ticker, weight, asset_class, _ in portfolio:
+            ac_weights[asset_class] = ac_weights.get(asset_class, 0) + weight
+    else:
+        # Derive from first period's securities
+        first_period = next(iter(results.values()))
+        for s in first_period["securities"]:
+            ac_weights[s["asset_class"]] = ac_weights.get(s["asset_class"], 0) + s["weight"]
+
+    sorted_acs = sorted(ac_weights.items(), key=lambda x: -x[1])
 
     lines += [
         "## Portfolio Resilience Assessment",
         "",
-        "The portfolio's heavy allocation to gold (20%), short-term bonds (16%), and long-term "
-        "treasuries (16%) provides substantial downside protection. The diversification across "
-        "asset classes, geographies (Japanese sogo shosha, EM equity/bonds), and alternative assets "
-        "(commodities, uranium) further reduces correlation to US equity drawdowns.",
+        "Portfolio allocation by asset class:",
         "",
-        "Key defensive characteristics:",
-        "- **Gold** (20%): Historically rallies during equity crises (flight to safety)",
-        "- **T-bills** (16%): Near-zero drawdown in all scenarios",
-        "- **Long treasuries/TIPS** (16%): Rally during deflationary crises (2001, 2008), "
-        "though vulnerable to inflationary ones",
-        "- **Low US equity** (4%): Minimal direct exposure to US stock drawdowns",
+    ]
+    for ac, weight in sorted_acs:
+        lines.append(f"- **{ac}**: {weight*100:.1f}%")
+
+    lines += [
         "",
-        "Key risk factors:",
-        "- **Japanese sogo shosha** (14%): Concentrated single-country equity exposure",
-        "- **EM assets** (12%): Can suffer amplified drawdowns vs developed markets",
-        "- **Negative cash/margin** (-8%): Leverage amplifies losses",
+        "The portfolio's resilience during drawdowns depends on diversification across "
+        "asset classes and geographies. See the per-period analysis above for how each "
+        "asset class performed during specific crises.",
         "",
         "---",
         f"*See interactive HTML report for detailed charts and per-security analysis.*",
@@ -926,26 +975,27 @@ def main(argv: list = None):
     results = run_backtest(portfolio=portfolio, periods=periods)
 
     # Determine output paths
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
     if args.output_dir:
         output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        html_path = str(output_dir / "dashboard.html")
-        md_path = str(output_dir / "summary.md")
-        data_path = str(output_dir / "data.json")
     else:
-        html_path = "./reports/portfolio_drawdown_backtest.html"
-        md_path = "./reports/Portfolio Drawdown Backtest.md"
-        data_path = None
+        output_dir = Path(f"./{timestamp}-portfolio-backtest")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    html_path = str(output_dir / f"{timestamp}-dashboard.html")
+    md_path = str(output_dir / f"{timestamp}-summary.md")
+    data_path = str(output_dir / f"{timestamp}-data.json")
 
     if not args.no_html:
         generate_html_report(results, html_path)
 
-    generate_markdown_report(results, md_path)
+    generate_markdown_report(results, md_path, portfolio=portfolio)
 
-    if data_path:
-        write_data_json(results, data_path)
+    write_data_json(results, data_path)
 
-    print("\nDone! Open the HTML report in a browser to view interactive charts.")
+    print("\nDone!")
+    if not args.no_html:
+        import webbrowser
+        webbrowser.open(Path(html_path).resolve().as_uri())
 
 
 if __name__ == "__main__":
