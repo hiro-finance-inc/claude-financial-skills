@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Credit Card Optimization Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const DATA = /* __DATA_PLACEHOLDER__ */;
+</script>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #1a202c;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --green: #10b981;
+    --green-bg: #ecfdf5;
+    --red: #ef4444;
+    --red-bg: #fef2f2;
+    --amber: #f59e0b;
+    --amber-bg: #fffbeb;
+    --purple: #8b5cf6;
+    --purple-bg: #f5f3ff;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 { font-size: 1.75rem; font-weight: 700; }
+  h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 16px; }
+  h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+
+  .section { margin-bottom: 32px; }
+
+  /* Hero */
+  .hero {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .hero-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .hero-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 8px 0 4px;
+  }
+  .hero-card .label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .hero-card .sub {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+  .hero-card.savings .value { color: var(--green); }
+  .hero-card.fees .value { color: var(--red); }
+
+  /* Cards Grid */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .cc-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--border);
+    position: relative;
+  }
+  .cc-card.keep { border-left-color: var(--green); }
+  .cc-card.downgrade { border-left-color: var(--red); }
+  .cc-card.evaluate { border-left-color: var(--amber); }
+  .cc-card.investigate { border-left-color: var(--purple); }
+  .cc-card.cancel { border-left-color: var(--red); }
+
+  .cc-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .cc-card .card-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .badge.keep { background: var(--green-bg); color: var(--green); }
+  .badge.downgrade { background: var(--red-bg); color: var(--red); }
+  .badge.cancel { background: var(--red-bg); color: var(--red); }
+  .badge.evaluate { background: var(--amber-bg); color: var(--amber); }
+  .badge.investigate { background: var(--purple-bg); color: var(--purple); }
+
+  .cc-card .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
+  .cc-card .stat-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  .cc-card .stat-value {
+    font-weight: 600;
+  }
+  .cc-card .card-note {
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Misallocations */
+  .misallocation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .misallocation-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .misallocation-item .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .misallocation-item .savings-badge {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--green);
+  }
+  .bar-group {
+    margin-bottom: 8px;
+  }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+  }
+  .bar-label span:first-child { color: var(--text-muted); }
+  .bar-label span:last-child { font-weight: 600; }
+  .bar-track {
+    height: 24px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    transition: width 0.6s ease;
+  }
+  .bar-fill.current { background: #94a3b8; }
+  .bar-fill.optimal { background: var(--green); }
+
+  /* Credits */
+  .credits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .credit-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+  }
+  .credit-item .credit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .credit-item .credit-name { font-weight: 600; font-size: 0.9rem; }
+  .credit-item .credit-amount { font-weight: 600; font-size: 0.9rem; }
+  .progress-bar {
+    height: 8px;
+    background: #f1f5f9;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s ease;
+  }
+  .progress-fill.full { background: var(--green); }
+  .progress-fill.partial { background: var(--amber); }
+  .progress-fill.none { background: var(--red); }
+  .credit-status {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .net-summary {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .net-summary .net-item {
+    text-align: center;
+  }
+  .net-summary .net-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .net-summary .net-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+  .net-summary .positive { color: var(--green); }
+  .net-summary .negative { color: var(--red); }
+
+  /* Wallet Guide */
+  .wallet-table {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wallet-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  .wallet-table th {
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  .wallet-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .wallet-table tr:last-child td { border-bottom: none; }
+  .wallet-table .rate {
+    font-weight: 700;
+    color: var(--green);
+    white-space: nowrap;
+  }
+  .wallet-table .category-icon {
+    margin-right: 6px;
+  }
+
+  /* Action Items */
+  .actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .action-item.checked {
+    opacity: 0.5;
+  }
+  .action-item.checked .action-text {
+    text-decoration: line-through;
+  }
+  .action-item input[type="checkbox"] {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--green);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .action-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .action-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .action-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 0.8rem;
+  }
+  .action-value {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .difficulty {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+  }
+  .difficulty-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .difficulty.easy .difficulty-dot { background: var(--green); }
+  .difficulty.medium .difficulty-dot { background: var(--amber); }
+  .difficulty.hard .difficulty-dot { background: var(--red); }
+
+  .section-subtitle {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    margin-top: -8px;
+  }
+
+  .header {
+    margin-bottom: 32px;
+  }
+  .header .subtitle {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 4px;
+  }
+
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .section-divider h2 { margin-bottom: 0; white-space: nowrap; }
+  .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .investigate-header {
+    margin-top: 24px;
+    margin-bottom: 12px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+  }
+  .investigate-header h3 {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 16px; }
+    .hero { grid-template-columns: 1fr 1fr; }
+    .hero-card .value { font-size: 1.5rem; }
+    .cards-grid { grid-template-columns: 1fr; }
+    .credits-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+function $(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if (attrs) Object.entries(attrs).forEach(([k, v]) => {
+    if (k === 'className') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else el.setAttribute(k, v);
+  });
+  children.flat().forEach(c => {
+    if (c == null) return;
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return el;
+}
+
+function formatMoney(n) {
+  if (n == null || isNaN(n)) return '$0';
+  return '$' + Math.round(n).toLocaleString();
+}
+
+function formatRate(r) {
+  if (r == null || isNaN(r)) return '\u2014';
+  return (r * 100).toFixed(1) + '%';
+}
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+// Difficulty dots
+function difficultyDots(level) {
+  const l = (level || 'easy').toLowerCase();
+  const count = l === 'easy' ? 1 : l === 'medium' ? 2 : 3;
+  const dots = Array.from({length: count}, () => $('span', {className: 'difficulty-dot'}));
+  const label = l.charAt(0).toUpperCase() + l.slice(1);
+  return $('span', {className: `difficulty ${l}`}, ...dots, ' ' + label);
+}
+
+function renderHeader() {
+  const p = DATA.period || {};
+  const s = DATA.summary || {};
+  const sub = `Analysis period: ${p.start || '?'} \u2013 ${p.end || '?'} \u00B7 ${s.cardCount || '?'} cards \u00B7 ${formatMoney(s.totalSpend)} in spending`;
+  return $('div', {className: 'header'},
+    $('h1', null, 'Credit Card Optimization Dashboard'),
+    $('p', {className: 'subtitle'}, sub)
+  );
+}
+
+function renderHero() {
+  const s = DATA.summary || {};
+  const feeCards = (DATA.cards || []).filter(c => c.annualFee > 0).length;
+  const activeCards = (DATA.cards || []).filter(c => c.spend > 0).length;
+  const downgrades = (DATA.cards || []).filter(c => c.status === 'downgrade' || c.status === 'cancel').length;
+  const evaluates = (DATA.cards || []).filter(c => c.status === 'evaluate' || c.status === 'investigate').length;
+
+  return $('div', {className: 'hero'},
+    $('div', {className: 'hero-card savings'},
+      $('div', {className: 'label'}, 'Savings Opportunity'),
+      $('div', {className: 'value'}, formatMoney(s.totalSavings)),
+      $('div', {className: 'sub'}, 'per year with optimized routing')
+    ),
+    $('div', {className: 'hero-card fees'},
+      $('div', {className: 'label'}, 'Current Annual Fees'),
+      $('div', {className: 'value'}, formatMoney(s.totalFees)),
+      $('div', {className: 'sub'}, `across ${feeCards} fee-bearing card${feeCards !== 1 ? 's' : ''}`)
+    ),
+    $('div', {className: 'hero-card'},
+      $('div', {className: 'label'}, `${(DATA.period || {}).months || 6}-Month Spend`),
+      $('div', {className: 'value', style: {color: 'var(--accent)'}}, formatMoney(s.totalSpend)),
+      $('div', {className: 'sub'}, `across ${activeCards} active card${activeCards !== 1 ? 's' : ''}`)
+    ),
+    $('div', {className: 'hero-card'},
+      $('div', {className: 'label'}, 'Cards Analyzed'),
+      $('div', {className: 'value', style: {color: 'var(--text)'}}, String(s.cardCount || 0)),
+      $('div', {className: 'sub'}, `${downgrades} downgrade${downgrades !== 1 ? 's' : ''}, ${evaluates} to evaluate`)
+    )
+  );
+}
+
+function renderCards() {
+  const cards = DATA.cards || [];
+  const grid = $('div', {className: 'cards-grid'});
+  cards.forEach(c => {
+    const status = (c.status || 'keep').toLowerCase();
+    const months = (DATA.period || {}).months || 6;
+    const card = $('div', {className: `cc-card ${status}`},
+      $('div', {className: 'card-header'},
+        $('div', {className: 'card-name'}, c.name),
+        $('span', {className: `badge ${status}`}, status.charAt(0).toUpperCase() + status.slice(1))
+      ),
+      $('div', {className: 'stats'},
+        $('div', null,
+          $('div', {className: 'stat-label'}, 'Annual Fee'),
+          $('div', {className: 'stat-value'}, formatMoney(c.annualFee))
+        ),
+        $('div', null,
+          $('div', {className: 'stat-label'}, `${months}-Mo Spend`),
+          $('div', {className: 'stat-value'}, formatMoney(c.spend))
+        ),
+        $('div', null,
+          $('div', {className: 'stat-label'}, 'Best Rate'),
+          $('div', {className: 'stat-value'}, c.bestRate || formatRate(c.effectiveRate))
+        ),
+        $('div', null,
+          $('div', {className: 'stat-label'}, 'Effective'),
+          $('div', {className: 'stat-value'}, formatRate(c.effectiveRate))
+        )
+      ),
+      c.statusReason ? $('div', {className: 'card-note'}, c.statusReason) : null
+    );
+    grid.appendChild(card);
+  });
+
+  return $('div', {className: 'section'},
+    $('div', {className: 'section-divider'}, $('h2', null, 'Your Cards')),
+    grid
+  );
+}
+
+function renderMisallocations() {
+  const items = DATA.misallocations || [];
+  if (items.length === 0) return null;
+
+  const list = $('div', {className: 'misallocation-list'});
+  items.forEach(m => {
+    const maxRate = Math.max(m.currentRate || 0, m.optimalRate || 0);
+    const currentPct = maxRate > 0 ? ((m.currentRate || 0) / maxRate * 100) : 0;
+    const optimalPct = maxRate > 0 ? ((m.optimalRate || 0) / maxRate * 100) : 0;
+    const currentLabel = m.currentRateLabel || formatRate(m.currentRate);
+    const optimalLabel = m.optimalRateLabel || formatRate(m.optimalRate);
+
+    const item = $('div', {className: 'misallocation-item'},
+      $('div', {className: 'item-header'},
+        $('h3', null, m.category),
+        $('span', {className: 'savings-badge'}, '+' + formatMoney(m.annualLoss) + '/yr')
+      ),
+      m.details ? $('p', {style: {fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px'}}, m.details) : null,
+      $('div', {className: 'bar-group'},
+        $('div', {className: 'bar-label'},
+          $('span', null, 'Current: ' + (m.currentCard || '')),
+          $('span', null, currentLabel)
+        ),
+        $('div', {className: 'bar-track'},
+          $('div', {className: 'bar-fill current', style: {width: currentPct + '%'}}, currentLabel)
+        )
+      ),
+      $('div', {className: 'bar-group'},
+        $('div', {className: 'bar-label'},
+          $('span', null, 'Optimal: ' + (m.optimalCard || '')),
+          $('span', null, optimalLabel)
+        ),
+        $('div', {className: 'bar-track'},
+          $('div', {className: 'bar-fill optimal', style: {width: optimalPct + '%'}}, optimalLabel)
+        )
+      )
+    );
+    list.appendChild(item);
+  });
+
+  return $('div', {className: 'section'},
+    $('div', {className: 'section-divider'}, $('h2', null, 'Spending Misallocations')),
+    $('p', {className: 'section-subtitle'}, 'Where you\'re leaving money on the table \u2014 current vs optimal earning rates'),
+    list
+  );
+}
+
+function renderCredits() {
+  const credits = DATA.credits || [];
+  if (credits.length === 0) return null;
+
+  // Group credits by card
+  const byCard = {};
+  credits.forEach(cr => {
+    if (!byCard[cr.card]) byCard[cr.card] = [];
+    byCard[cr.card].push(cr);
+  });
+
+  const sections = [];
+  Object.entries(byCard).forEach(([cardName, crs]) => {
+    const grid = $('div', {className: 'credits-grid'});
+    crs.forEach(cr => {
+      const pct = cr.available > 0 ? (cr.claimed / cr.available * 100) : 0;
+      const fillClass = pct >= 90 ? 'full' : pct > 0 ? 'partial' : 'none';
+      const statusText = cr.status || (pct >= 90 ? 'Claiming' : pct > 0 ? 'Partially claimed' : 'Not claiming');
+
+      grid.appendChild($('div', {className: 'credit-item'},
+        $('div', {className: 'credit-header'},
+          $('span', {className: 'credit-name'}, cr.credit),
+          $('span', {className: 'credit-amount'}, formatMoney(cr.available) + '/yr')
+        ),
+        $('div', {className: 'progress-bar'},
+          $('div', {className: `progress-fill ${fillClass}`, style: {width: Math.min(pct, 100) + '%'}})
+        ),
+        $('div', {className: 'credit-status'}, statusText)
+      ));
+    });
+
+    // Calculate net summary for this card
+    const totalAvailable = crs.reduce((s, c) => s + (c.available || 0), 0);
+    const totalClaimed = crs.reduce((s, c) => s + (c.claimed || 0), 0);
+    // Find card fee
+    const cardData = (DATA.cards || []).find(c => c.name === cardName);
+    const fee = cardData ? cardData.annualFee : 0;
+    const netProfit = totalClaimed - fee;
+
+    const summary = $('div', {className: 'net-summary'},
+      $('div', {className: 'net-item'},
+        $('div', {className: 'net-label'}, 'Total Available'),
+        $('div', {className: 'net-value'}, formatMoney(totalAvailable))
+      ),
+      $('div', {className: 'net-item'},
+        $('div', {className: 'net-label'}, 'Currently Claimed'),
+        $('div', {className: 'net-value', style: {color: 'var(--amber)'}}, '~' + formatMoney(totalClaimed))
+      ),
+      $('div', {className: 'net-item'},
+        $('div', {className: 'net-label'}, 'Annual Fee'),
+        $('div', {className: 'net-value negative'}, '-' + formatMoney(fee))
+      ),
+      $('div', {className: 'net-item'},
+        $('div', {className: 'net-label'}, 'Net Profit'),
+        $('div', {className: `net-value ${netProfit >= 0 ? 'positive' : 'negative'}`}, (netProfit >= 0 ? '+' : '-') + formatMoney(Math.abs(netProfit)) + '/yr')
+      )
+    );
+
+    const subtitle = `${formatMoney(fee)}/yr fee offset by ${formatMoney(totalAvailable)}/yr in available credits \u2014 net ${netProfit >= 0 ? '+' : '-'}${formatMoney(Math.abs(netProfit))}/yr`;
+
+    sections.push($('div', {className: 'section'},
+      $('div', {className: 'section-divider'}, $('h2', null, cardName + ' Credits')),
+      $('p', {className: 'section-subtitle'}, subtitle),
+      grid,
+      summary
+    ));
+  });
+
+  return $('div', null, ...sections);
+}
+
+function renderWalletGuide() {
+  const guide = DATA.walletGuide || [];
+  if (guide.length === 0) return null;
+
+  const tbody = $('tbody');
+  guide.forEach(g => {
+    const icon = g.icon ? $('span', {className: 'category-icon'}, g.icon) : null;
+    tbody.appendChild($('tr', null,
+      $('td', null, icon, g.category),
+      $('td', null, g.card),
+      $('td', {className: 'rate'}, g.rate),
+      g.notes ? $('td', null, g.notes) : null
+    ));
+  });
+
+  const hasNotes = guide.some(g => g.notes);
+  const thead = $('thead', null,
+    $('tr', null,
+      $('th', null, 'Category'),
+      $('th', null, 'Card'),
+      $('th', null, 'Rate'),
+      hasNotes ? $('th', null, 'Notes') : null
+    )
+  );
+
+  return $('div', {className: 'section'},
+    $('div', {className: 'section-divider'}, $('h2', null, 'Optimal Wallet Guide')),
+    $('p', {className: 'section-subtitle'}, 'Your cheat sheet \u2014 which card to pull for each purchase type'),
+    $('div', {className: 'wallet-table'},
+      $('table', null, thead, tbody)
+    )
+  );
+}
+
+function renderActionItems() {
+  const actions = DATA.actionItems || [];
+  if (actions.length === 0) return null;
+
+  const STORAGE_KEY = 'cc-dashboard-actions';
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  const state = loadState();
+  const list = $('div', {className: 'actions-list', id: 'actions-list'});
+
+  // Separate investigate items
+  const mainActions = actions.filter(a => (a.difficulty || '').toLowerCase() !== 'investigate');
+  const investigateActions = actions.filter(a => (a.difficulty || '').toLowerCase() === 'investigate');
+
+  function renderAction(a) {
+    const id = slugify(a.action);
+    const checkbox = $('input', {type: 'checkbox', id: 'chk-' + id});
+    const item = $('div', {className: 'action-item', 'data-id': id});
+
+    if (state[id]) {
+      checkbox.checked = true;
+      item.classList.add('checked');
+    }
+
+    const diffLevel = (a.difficulty || 'easy').toLowerCase();
+    const diffDisplay = diffLevel === 'investigate' ? 'medium' : diffLevel;
+
+    item.appendChild(checkbox);
+    item.appendChild($('div', {className: 'action-content'},
+      $('div', {className: 'action-text'}, a.action),
+      $('div', {className: 'action-meta'},
+        $('span', {className: 'action-value'}, typeof a.annualValue === 'string' ? a.annualValue : '~' + formatMoney(a.annualValue) + '/yr'),
+        a.details ? difficultyDots(diffDisplay) : difficultyDots(diffDisplay)
+      ),
+      a.details ? $('div', {style: {fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px'}}, a.details) : null
+    ));
+
+    item.addEventListener('click', (e) => {
+      if (e.target === checkbox) return;
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change'));
+    });
+
+    checkbox.addEventListener('change', () => {
+      const s = loadState();
+      if (checkbox.checked) { s[id] = true; item.classList.add('checked'); }
+      else { delete s[id]; item.classList.remove('checked'); }
+      saveState(s);
+    });
+
+    return item;
+  }
+
+  mainActions.forEach(a => list.appendChild(renderAction(a)));
+
+  if (investigateActions.length > 0) {
+    list.appendChild($('div', {className: 'investigate-header'},
+      $('h3', null, 'Investigate')
+    ));
+    investigateActions.forEach(a => list.appendChild(renderAction(a)));
+  }
+
+  return $('div', {className: 'section'},
+    $('div', {className: 'section-divider'}, $('h2', null, 'Action Items')),
+    $('p', {className: 'section-subtitle'}, 'Ranked by annual value \u2014 checkboxes persist in your browser'),
+    list
+  );
+}
+
+function renderFooter() {
+  const p = DATA.period || {};
+  const gen = DATA.generated ? new Date(DATA.generated).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}) : '';
+  return $('div', {style: {textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '32px 0 16px', borderTop: '1px solid var(--border)', marginTop: '48px'}},
+    `Credit Card Optimization Analysis \u00B7 ${gen} \u00B7 Data from ${p.start || '?'} \u2013 ${p.end || '?'}`
+  );
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const parts = [
+    renderHeader(),
+    renderHero(),
+    renderCards(),
+    renderMisallocations(),
+    renderCredits(),
+    renderWalletGuide(),
+    renderActionItems(),
+    renderFooter()
+  ].filter(Boolean);
+  parts.forEach(p => app.appendChild(p));
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+
+</body>
+</html>
