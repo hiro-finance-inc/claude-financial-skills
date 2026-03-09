@@ -1,6 +1,6 @@
 # Claude Financial Skills
 
-Personal financial skills for [Claude Code](https://claude.com/claude-code) and [Claude Desktop](https://claude.ai/download), powered by [Hiro Finance](https://hirofinance.com).
+Personal finance skills for [Claude Code](https://claude.com/claude-code) and [Claude Desktop](https://claude.ai/download), powered by [Hiro Finance](https://hirofinance.com).
 
 ## Skills
 
