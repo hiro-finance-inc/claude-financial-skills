@@ -1,6 +1,6 @@
 # Claude Financial Skills
 
-Financial analysis skills for [Claude Code](https://claude.com/claude-code) and [Claude Desktop](https://claude.ai/download), powered by the [Hiro Finance](https://hirofinance.com) MCP server.
+Personal financial skills for [Claude Code](https://claude.com/claude-code) and [Claude Desktop](https://claude.ai/download), powered by the [Hiro Finance](https://hirofinance.com) MCP server.
 
 ## Skills
 
@@ -13,7 +13,7 @@ Financial analysis skills for [Claude Code](https://claude.com/claude-code) and 
 
 1. **Claude Code** or **Claude Desktop** installed
 2. **Hiro account** with linked financial accounts at [hirofinance.com](https://hirofinance.com)
-3. **Hiro MCP server** connected to Claude — see [Hiro docs](https://hirofinance.com/docs) for setup
+3. **Hiro MCP server** connected to Claude — see [Hiro MCP](https://hirofinance.com/mcp) for setup
 
 ### Optional
 
@@ -64,7 +64,7 @@ These skills are instruction sets (SKILL.md files) that tell Claude how to:
 2. Analyze it (spending patterns, portfolio allocations, etc.)
 3. Generate reports and interactive dashboards
 
-The Hiro MCP server provides secure, read-only access to your financial accounts. Claude does the analysis — no data leaves your machine.
+The Hiro MCP server provides secure, read-only access to your financial accounts. Claude does the analysis — no data is sent to third-party services beyond Anthropic's API.
 
 ## License
 
