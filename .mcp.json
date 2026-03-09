@@ -1,0 +1,6 @@
+{
+  "hiro": {
+    "type": "http",
+    "url": "https://mcp.hirofinance.com"
+  }
+}
