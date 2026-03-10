@@ -405,13 +405,12 @@ def test_group_by_asset_class():
     assert abs(groups["US equity"]["weighted_dd"] - (0.30 * -40.0)) < 1e-9
 
 
-# ── Item 4: Portfolio construction without bfill ───────────────────────
+# ── Item 4: Late-starting series backfilled with initial value ────────
 
-def test_portfolio_construction_no_bfill():
-    """Late-starting series should NOT have future data backfilled into earlier dates.
-
-    Series B starts on day 3. On days 1-2, only series A should contribute
-    to the portfolio sum (no leaking B's first value backward).
+def test_late_start_backfills_initial_value():
+    """Late-starting series should be backfilled with weight * 1.0 (the
+    neutral 'hasn't moved yet' assumption), so the portfolio starts at 1.0
+    and doesn't spike when the late series appears.
     """
     dates = pd.bdate_range("2020-01-01", periods=5)
 
@@ -427,8 +426,60 @@ def test_portfolio_construction_no_bfill():
 
     portfolio = pdb.combine_weighted_series([weighted_a, weighted_b])
 
-    # Day 1: only A has data, so sum should be 0.5 (not 1.0 from bfill)
-    assert abs(portfolio.iloc[0] - 0.5) < 1e-9
+    # Day 1: A contributes 0.5, B backfilled at 0.5 (weight * 1.0) → total 1.0
+    assert abs(portfolio.iloc[0] - 1.0) < 1e-9
+
+    # B's backfilled days should be flat at its weight (no future prices leaked)
+    # Day 1 and Day 2 both have B at 0.5 (its initial normalized * weight value)
+    day1_b_contribution = portfolio.iloc[0] - weighted_a.iloc[0]
+    day2_b_contribution = portfolio.iloc[1] - weighted_a.iloc[1]
+    assert abs(day1_b_contribution - 0.5) < 1e-9
+    assert abs(day2_b_contribution - 0.5) < 1e-9
+
+
+# ── Item 11: Late-starting securities should not cause spikes ─────────
+
+def test_late_start_no_spike():
+    """When a security (~15% weight) starts a few days late, the portfolio
+    should NOT spike when its data appears.
+
+    Bug: combine_weighted_series ffills but doesn't bfill, so NaN before
+    a security's first data point → 0 contribution → sudden jump when
+    data appears. E.g. GC=F (gold, ~19%) missing at start of dot-com.
+    """
+    dates = pd.bdate_range("2020-01-01", periods=10)
+
+    # 4 securities with full data (85% total weight)
+    full_series = []
+    for i, w in enumerate([0.40, 0.25, 0.12, 0.08]):
+        prices = pd.Series(
+            np.linspace(100, 100 - i * 2, 10), index=dates, dtype=float
+        )
+        norm = prices / prices.iloc[0]
+        full_series.append(norm * w)
+
+    # 1 security (15% weight) starts on day 4
+    late_prices = pd.Series(
+        np.linspace(100, 95, 7), index=dates[3:], dtype=float
+    )
+    norm_late = late_prices / late_prices.iloc[0]
+    late_series = norm_late * 0.15
+
+    portfolio = pdb.combine_weighted_series(full_series + [late_series])
+
+    # Portfolio should start near 1.0, not 0.85
+    assert portfolio.iloc[0] > 0.95, (
+        f"Portfolio starts at {portfolio.iloc[0]:.4f} — "
+        f"missing late-start security weight"
+    )
+
+    # No single-day jump > 5% (the spike when late security appears)
+    daily_returns = portfolio.pct_change().dropna()
+    max_jump = daily_returns.abs().max()
+    assert max_jump < 0.05, (
+        f"Max single-day change is {max_jump:.1%} — "
+        f"late-starting security caused a spike"
+    )
 
 
 # ── Item 5: dd_color ──────────────────────────────────────────────────

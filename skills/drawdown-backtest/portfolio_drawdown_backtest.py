@@ -151,7 +151,7 @@ def combine_weighted_series(all_weighted_series: list[pd.Series]) -> pd.Series |
     # Drop rows where <50% of securities have data (e.g. weekends/holidays with only crypto)
     valid_mask = combined.notna().sum(axis=1) >= max(1, len(combined.columns) * 0.5)
     combined = combined.loc[valid_mask]
-    combined = combined.ffill()
+    combined = combined.ffill().bfill()
     return combined.sum(axis=1)
 
 
