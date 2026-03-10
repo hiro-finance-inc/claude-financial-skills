@@ -23,9 +23,9 @@ Each run creates a timestamped folder — never overwrites previous runs:
 
 ```
 cc-optimize-YYYY-MM-DD-HHMM/
-├── analysis.md          # Full analysis document
-├── dashboard.html       # Interactive dashboard
-└── data.json            # Raw data snapshot
+├── cc-optimize-YYYY-MM-DD-HHMM-analysis.md      # Full analysis document
+├── cc-optimize-YYYY-MM-DD-HHMM-dashboard.html   # Interactive dashboard
+└── cc-optimize-YYYY-MM-DD-HHMM-data.json        # Raw data snapshot
 ```
 
 ## Prerequisites
@@ -212,14 +212,15 @@ Generate a ranked list of changes by annual value:
 
 ### Phase 5: Write Analysis Document
 
-Create the timestamped output folder and write `analysis.md`:
+Create the timestamped output folder and write `$STAMP-analysis.md`:
 
 ```bash
-OUTPUT_DIR="./cc-optimize-$(date +%Y-%m-%d-%H%M)"
+STAMP="cc-optimize-$(date +%Y-%m-%d-%H%M)"
+OUTPUT_DIR="./$STAMP"
 mkdir -p "$OUTPUT_DIR"
 ```
 
-**analysis.md sections:**
+**`$STAMP-analysis.md` sections:**
 
 1. **Overview** — Date, analysis period, total spend across all cards, total annual fees, estimated annual savings opportunity
 2. **Points Valuations Used** — Table of program → redemption method → cpp value with source. Include how each method was determined (auto-detected from transactions/email vs. user-specified) and list alternative redemption options not chosen with their cpp values.
@@ -239,13 +240,13 @@ mkdir -p "$OUTPUT_DIR"
    ```
 2. Build the `DATA` JSON object containing all analysis results structured for the dashboard
 3. Replace `/* __DATA_PLACEHOLDER__ */` in the template with the actual JSON data
-4. Save as `dashboard.html` in the output folder
+4. Save as `$STAMP-dashboard.html` in the output folder
 5. Open in browser:
    ```bash
-   open "$OUTPUT_DIR/dashboard.html"
+   open "$OUTPUT_DIR/$STAMP-dashboard.html"
    ```
 
-Also save `data.json` in the output folder for future diffing between runs.
+Also save `$STAMP-data.json` in the output folder for future diffing between runs.
 
 ## DATA JSON Structure
 
@@ -340,6 +341,6 @@ The dashboard template expects this structure:
 - **DO ask about unidentifiable cards** — if you can't determine a card's reward structure from web search (e.g., obscure card, ambiguous name from Hiro), ask the user via `AskUserQuestion` what card it is, its reward rates, and annual fee. Getting this right matters more than speed.
 - **Paginate all Hiro API calls** — always check for cursor/next and fetch all pages
 - **Use current web data** — do not rely on embedded knowledge for points valuations or card benefits
-- **Be precise with numbers** — never round unless displaying summaries. Keep full precision in data.json
+- **Be precise with numbers** — never round unless displaying summaries. Keep full precision in the data JSON
 - **Detect redemption methods before asking** — scan transactions for reward credits and Gmail for transfer/booking confirmations. Only ask the user to confirm or fill gaps. Critical because cpp varies 2-3x by redemption method.
 - **Cite sources** — include URLs or source names for all points valuations
