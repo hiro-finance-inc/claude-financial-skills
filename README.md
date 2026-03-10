@@ -22,21 +22,16 @@ Personal finance skills for [Claude Code](https://claude.com/claude-code) and [C
 
 ## Install skills
 
-1. **Set up the Hiro MCP server** (if not already done):
+1. **Set up the [Hiro MCP server](https://hirofinance.com/mcp)** (if not already done):
    ```bash
    claude mcp add --transport http hiro https://mcp.hirofinance.com
    ```
-   See [hirofinance.com/mcp](https://hirofinance.com/mcp) for setup details.
 
 2. **Add skills** — download into your project's skills directory:
+
    ```bash
-   # All skills
    mkdir -p .claude/skills && curl -sL https://github.com/hiro-finance-inc/claude-financial-skills/archive/main.tar.gz \
      | tar xz --strip-components=2 -C .claude/skills/ "claude-financial-skills-main/skills/"
-
-   # Or just one skill
-   mkdir -p .claude/skills && curl -sL https://github.com/hiro-finance-inc/claude-financial-skills/archive/main.tar.gz \
-     | tar xz --strip-components=2 -C .claude/skills/ "claude-financial-skills-main/skills/cc-optimize"
    ```
 
 ## Usage
