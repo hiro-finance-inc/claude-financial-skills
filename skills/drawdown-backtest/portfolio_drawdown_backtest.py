@@ -143,6 +143,18 @@ def dd_color(value):
         return "#dc2626"
 
 
+def combine_weighted_series(all_weighted_series: list[pd.Series]) -> pd.Series | None:
+    """Combine weighted normalized price series into a single portfolio series."""
+    if not all_weighted_series:
+        return None
+    combined = pd.DataFrame({f"s{i}": s for i, s in enumerate(all_weighted_series)})
+    # Drop rows where <50% of securities have data (e.g. weekends/holidays with only crypto)
+    valid_mask = combined.notna().sum(axis=1) >= max(1, len(combined.columns) * 0.5)
+    combined = combined.loc[valid_mask]
+    combined = combined.ffill()
+    return combined.sum(axis=1)
+
+
 def group_by_asset_class(securities):
     """Group securities by asset class with aggregate weight, weighted drawdown, and weighted return.
 
@@ -528,13 +540,7 @@ def run_backtest(portfolio: list = None, periods: list = None):
 
             security_results.append(stats)
 
-        # Combine all series: align dates with ffill only (no bfill to avoid future data leakage)
-        if all_weighted_series:
-            combined = pd.DataFrame({f"s{i}": s for i, s in enumerate(all_weighted_series)})
-            combined = combined.ffill()
-            portfolio_series = combined.sum(axis=1)
-        else:
-            portfolio_series = None
+        portfolio_series = combine_weighted_series(all_weighted_series)
 
         # Calculate portfolio-level stats
         portfolio_stats = calc_drawdown_stats(portfolio_series)

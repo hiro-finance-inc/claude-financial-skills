@@ -408,35 +408,27 @@ def test_group_by_asset_class():
 # ── Item 4: Portfolio construction without bfill ───────────────────────
 
 def test_portfolio_construction_no_bfill():
-    """Portfolio with ffill-only should NOT backfill future data into earlier dates.
+    """Late-starting series should NOT have future data backfilled into earlier dates.
 
-    With bfill, a series that starts later has its first value leaked backward.
-    With ffill only, early dates should only include the available series.
+    Series B starts on day 3. On days 1-2, only series A should contribute
+    to the portfolio sum (no leaking B's first value backward).
     """
     dates = pd.bdate_range("2020-01-01", periods=5)
 
-    # Series A: full date range
+    # Series A (weight 0.5): full date range
     prices_a = pd.Series([100, 102, 104, 106, 108], index=dates, dtype=float)
-    # Series B: starts on day 3
-    prices_b = pd.Series([100, 98, 96], index=dates[2:], dtype=float)
-
     norm_a = prices_a / prices_a.iloc[0]
-    norm_b = prices_b / prices_b.iloc[0]
-
     weighted_a = norm_a * 0.5
+
+    # Series B (weight 0.5): starts on day 3
+    prices_b = pd.Series([100, 98, 96], index=dates[2:], dtype=float)
+    norm_b = prices_b / prices_b.iloc[0]
     weighted_b = norm_b * 0.5
 
-    combined = pd.DataFrame({"a": weighted_a, "b": weighted_b})
+    portfolio = pdb.combine_weighted_series([weighted_a, weighted_b])
 
-    # ffill only: day 1-2 have NaN for B → sum only A
-    portfolio_ffill = combined.ffill().sum(axis=1)
-    # bfill too: day 1-2 get B backfilled → sum both
-    portfolio_bfill = combined.ffill().bfill().sum(axis=1)
-
-    # They should differ on early dates
-    assert portfolio_ffill.iloc[0] != portfolio_bfill.iloc[0]
-    # ffill version: only A contributes on day 1
-    assert abs(portfolio_ffill.iloc[0] - 0.5) < 1e-9
+    # Day 1: only A has data, so sum should be 0.5 (not 1.0 from bfill)
+    assert abs(portfolio.iloc[0] - 0.5) < 1e-9
 
 
 # ── Item 5: dd_color ──────────────────────────────────────────────────
@@ -523,3 +515,53 @@ def test_end_date_buffer_constant():
     """END_DATE_BUFFER_DAYS constant should exist and be positive."""
     assert hasattr(pdb, "END_DATE_BUFFER_DAYS")
     assert pdb.END_DATE_BUFFER_DAYS > 0
+
+
+# ── Item 10: Crypto weekend/holiday sparse-row bug ───────────────────
+
+def test_crypto_weekend_rows_do_not_inflate_returns():
+    """BTC trades on weekends when nothing else does. If those sparse rows
+    aren't dropped, the portfolio sum starts at just BTC's weight (~0.01)
+    and jumps to ~1.0 on the next trading day — a fake 8000%+ return.
+
+    The portfolio combiner must drop rows where <50% of series have data
+    so that weekend-only crypto rows don't distort the result.
+    """
+    # BTC trades on Jan 1 (New Year's) and Jan 2, stocks start Jan 2
+    # This is the actual bug: BTC has data BEFORE stocks, so ffill can't
+    # fill stocks backward and the sum on Jan 1 is just BTC's weight
+    all_dates = pd.date_range("2020-01-01", periods=5, freq="D")  # Jan 1-5
+    stock_dates = all_dates[1:]  # Jan 2-5 (stocks start a day later)
+
+    # Stock A (weight 0.50): starts Jan 2
+    stock_prices = pd.Series([100.0, 99.0, 98.0, 97.0], index=stock_dates)
+    norm_stock = stock_prices / stock_prices.iloc[0]
+    weighted_stock = norm_stock * 0.50
+
+    # Stock B (weight 0.49): starts Jan 2
+    stock2_prices = pd.Series([100.0, 101.0, 102.0, 103.0], index=stock_dates)
+    norm_stock2 = stock2_prices / stock2_prices.iloc[0]
+    weighted_stock2 = norm_stock2 * 0.49
+
+    # BTC (weight 0.01): trades every day including Jan 1
+    btc_prices = pd.Series([100.0, 99.0, 101.0, 102.0, 100.0], index=all_dates)
+    norm_btc = btc_prices / btc_prices.iloc[0]
+    weighted_btc = norm_btc * 0.01
+
+    all_weighted_series = [weighted_stock, weighted_stock2, weighted_btc]
+
+    # Use the production combination function
+    portfolio_series = pdb.combine_weighted_series(all_weighted_series)
+
+    # The portfolio should start near 1.0 (sum of all weights), NOT at 0.01
+    assert portfolio_series.iloc[0] > 0.9, (
+        f"Portfolio starts at {portfolio_series.iloc[0]:.4f} — "
+        f"sparse weekend rows with only crypto are inflating returns"
+    )
+
+    # Total return should be reasonable, not thousands of percent
+    total_return = (portfolio_series.iloc[-1] / portfolio_series.iloc[0] - 1) * 100
+    assert abs(total_return) < 50, (
+        f"Total return is {total_return:.0f}% — "
+        f"crypto weekend rows are creating fake returns"
+    )
