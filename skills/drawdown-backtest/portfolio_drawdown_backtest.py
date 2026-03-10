@@ -992,10 +992,7 @@ def main(argv: list = None):
 
     write_data_json(results, data_path)
 
-    print("\nDone!")
-    if not args.no_html:
-        import webbrowser
-        webbrowser.open(Path(html_path).resolve().as_uri())
+    print(f"\nDone! Reports saved to {output_dir}/")
 
 
 if __name__ == "__main__":
