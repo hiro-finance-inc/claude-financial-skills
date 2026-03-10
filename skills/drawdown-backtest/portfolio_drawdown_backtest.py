@@ -1033,11 +1033,11 @@ def main(argv: list = None):
     if args.output_dir:
         output_dir = Path(args.output_dir)
     else:
-        output_dir = Path(f"./{timestamp}-portfolio-backtest")
+        output_dir = Path(f"./drawdown-backtest-{timestamp}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    html_path = str(output_dir / f"{timestamp}-dashboard.html")
-    md_path = str(output_dir / f"{timestamp}-summary.md")
-    data_path = str(output_dir / f"{timestamp}-data.json")
+    html_path = str(output_dir / f"drawdown-backtest-{timestamp}-dashboard.html")
+    md_path = str(output_dir / f"drawdown-backtest-{timestamp}-summary.md")
+    data_path = str(output_dir / f"drawdown-backtest-{timestamp}-data.json")
 
     if not args.no_html:
         generate_html_report(results, html_path)

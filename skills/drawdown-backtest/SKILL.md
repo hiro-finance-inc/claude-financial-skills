@@ -21,11 +21,11 @@ Fetch live portfolio from Hiro, classify holdings, backtest against major market
 Each run creates a timestamped folder in the current working directory:
 
 ```
-./drawdown-backtest-YYYY-MM-DD-HHMM/
-├── dashboard.html    # Interactive Plotly dashboard
-├── summary.md        # Markdown analysis
-├── portfolio.json    # Input snapshot for reproducibility
-└── data.json         # Raw results for downstream use
+drawdown-backtest-YYYY-MM-DD-HHMM/
+├── drawdown-backtest-YYYY-MM-DD-HHMM-dashboard.html    # Interactive Plotly dashboard
+├── drawdown-backtest-YYYY-MM-DD-HHMM-summary.md        # Markdown analysis
+├── portfolio.json                                       # Input snapshot for reproducibility
+└── drawdown-backtest-YYYY-MM-DD-HHMM-data.json          # Raw results for downstream use
 ```
 
 ## Prerequisites
