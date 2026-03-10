@@ -28,15 +28,15 @@ Personal finance skills for [Claude Code](https://claude.com/claude-code) and [C
    ```
    See [hirofinance.com/mcp](https://hirofinance.com/mcp) for setup details.
 
-2. **Add skills** — copy any skills you want into your Claude skills directory:
+2. **Add skills** — download into your project's skills directory:
    ```bash
    # All skills
-   git clone https://github.com/hiro-finance-inc/claude-financial-skills.git
-   cp -r claude-financial-skills/skills/* ~/.claude/skills/
+   mkdir -p .claude/skills && curl -sL https://github.com/hiro-finance-inc/claude-financial-skills/archive/main.tar.gz \
+     | tar xz --strip-components=2 -C .claude/skills/ "claude-financial-skills-main/skills/"
 
    # Or just one skill
-   cp -r claude-financial-skills/skills/cc-optimize ~/.claude/skills/
-   cp -r claude-financial-skills/skills/drawdown-backtest ~/.claude/skills/
+   mkdir -p .claude/skills && curl -sL https://github.com/hiro-finance-inc/claude-financial-skills/archive/main.tar.gz \
+     | tar xz --strip-components=2 -C .claude/skills/ "claude-financial-skills-main/skills/cc-optimize"
    ```
 
 ## Usage
