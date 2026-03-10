@@ -655,9 +655,9 @@ def generate_html_report(results: dict, output_path: str):
             <tr>
                 <td>{s['name']}</td>
                 <td>{s['asset_class']}</td>
-                <td>{s['weight']*100:.1f}%</td>
-                <td style="color:{color};font-weight:bold">{s['max_drawdown']:.1f}%</td>
-                <td>{s['total_return']:.1f}%</td>
+                <td data-sort-value="{s['weight']*100:.4f}">{s['weight']*100:.1f}%</td>
+                <td data-sort-value="{s['max_drawdown']:.4f}" style="color:{color};font-weight:bold">{s['max_drawdown']:.1f}%</td>
+                <td data-sort-value="{s['total_return']:.4f}">{s['total_return']:.1f}%</td>
                 <td style="font-size:0.85em;color:#666">{s['source']}</td>
             </tr>"""
 
@@ -666,8 +666,8 @@ def generate_html_report(results: dict, output_path: str):
         <table class="sec-table">
             <thead>
                 <tr>
-                    <th>Security</th><th>Asset Class</th><th>Weight</th>
-                    <th>Max Drawdown</th><th>Total Return</th><th>Data Source</th>
+                    <th data-sort-type="text" data-sort-default="asc">Security</th><th data-sort-type="text" data-sort-default="asc">Asset Class</th><th data-sort-type="num" data-sort-default="desc">Weight</th>
+                    <th data-sort-type="num" data-sort-default="asc">Max Drawdown</th><th data-sort-type="num" data-sort-default="desc">Total Return</th><th data-sort-type="text" data-sort-default="asc">Data Source</th>
                 </tr>
             </thead>
             <tbody>{rows_html}</tbody>
@@ -687,9 +687,9 @@ def generate_html_report(results: dict, output_path: str):
             rows_html += f"""
             <tr>
                 <td>{ac}</td>
-                <td>{vals['weight']*100:.1f}%</td>
-                <td style="color:{color};font-weight:bold">{avg_dd:.1f}%</td>
-                <td>{vals['weighted_dd']:.2f}%</td>
+                <td data-sort-value="{vals['weight']*100:.4f}">{vals['weight']*100:.1f}%</td>
+                <td data-sort-value="{avg_dd:.4f}" style="color:{color};font-weight:bold">{avg_dd:.1f}%</td>
+                <td data-sort-value="{vals['weighted_dd']:.4f}">{vals['weighted_dd']:.2f}%</td>
             </tr>"""
 
         asset_class_html += f"""
@@ -697,8 +697,8 @@ def generate_html_report(results: dict, output_path: str):
         <table class="sec-table">
             <thead>
                 <tr>
-                    <th>Asset Class</th><th>Portfolio Weight</th>
-                    <th>Avg Max Drawdown</th><th>Weighted DD Contribution</th>
+                    <th data-sort-type="text" data-sort-default="asc">Asset Class</th><th data-sort-type="num" data-sort-default="desc">Portfolio Weight</th>
+                    <th data-sort-type="num" data-sort-default="asc">Avg Max Drawdown</th><th data-sort-type="num" data-sort-default="asc">Weighted DD Contribution</th>
                 </tr>
             </thead>
             <tbody>{rows_html}</tbody>
@@ -755,6 +755,11 @@ def generate_html_report(results: dict, output_path: str):
         .summary-table th, .sec-table th {{ background: #1e293b; color: white; padding: 10px 12px; text-align: left; }}
         .summary-table td, .sec-table td {{ padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }}
         .summary-table tr:hover, .sec-table tr:hover {{ background: #f1f5f9; }}
+        .sec-table th[data-sort-type] {{ cursor: pointer; user-select: none; position: relative; padding-right: 22px; }}
+        .sec-table th[data-sort-type]:hover {{ background: #334155; }}
+        .sec-table th[data-sort-type]::after {{ content: '⇕'; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 0.75em; opacity: 0.4; }}
+        .sec-table th.sort-asc::after {{ content: '▲'; opacity: 0.9; }}
+        .sec-table th.sort-desc::after {{ content: '▼'; opacity: 0.9; }}
         .note {{ background: #fffbeb; border-left: 4px solid #f59e0b; padding: 1em; margin: 1em 0; font-size: 0.9em; }}
         .insight {{ background: #f0fdf4; border-left: 4px solid #22c55e; padding: 1em; margin: 1em 0; }}
     </style>
@@ -787,6 +792,49 @@ def generate_html_report(results: dict, output_path: str):
 
     <script>
     {chart_js}
+    (function() {{
+        document.querySelectorAll('.sec-table').forEach(function(table) {{
+            var headers = table.querySelectorAll('th[data-sort-type]');
+            headers.forEach(function(th, colIdx) {{
+                th.addEventListener('click', function() {{
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var type = th.getAttribute('data-sort-type');
+                    var defaultDir = th.getAttribute('data-sort-default') || 'asc';
+                    var dir;
+                    if (th.classList.contains('sort-asc')) {{
+                        dir = 'desc';
+                    }} else if (th.classList.contains('sort-desc')) {{
+                        dir = 'asc';
+                    }} else {{
+                        dir = defaultDir;
+                    }}
+                    headers.forEach(function(h) {{ h.classList.remove('sort-asc', 'sort-desc'); }});
+                    th.classList.add('sort-' + dir);
+                    var idx = Array.from(th.parentNode.children).indexOf(th);
+                    rows.sort(function(a, b) {{
+                        var cellA = a.children[idx];
+                        var cellB = b.children[idx];
+                        var valA, valB;
+                        if (type === 'num') {{
+                            valA = cellA.hasAttribute('data-sort-value') ? parseFloat(cellA.getAttribute('data-sort-value')) : parseFloat(cellA.textContent.replace(/[^\\d.\\-]/g, ''));
+                            valB = cellB.hasAttribute('data-sort-value') ? parseFloat(cellB.getAttribute('data-sort-value')) : parseFloat(cellB.textContent.replace(/[^\\d.\\-]/g, ''));
+                            if (isNaN(valA)) valA = 0;
+                            if (isNaN(valB)) valB = 0;
+                        }} else {{
+                            valA = cellA.textContent.trim().toLowerCase();
+                            valB = cellB.textContent.trim().toLowerCase();
+                        }}
+                        var cmp = 0;
+                        if (valA < valB) cmp = -1;
+                        else if (valA > valB) cmp = 1;
+                        return dir === 'asc' ? cmp : -cmp;
+                    }});
+                    rows.forEach(function(row) {{ tbody.appendChild(row); }});
+                }});
+            }});
+        }});
+    }})();
     </script>
 </body>
 </html>"""
