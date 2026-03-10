@@ -41,7 +41,7 @@ Execute these 6 phases sequentially. Each phase feeds the next. Do NOT ask the u
 
 **Goal:** Get current points valuations and card reward structures from the web.
 
-1. **Points valuations**: Web search for "credit card points valuations [current year]" from sources like The Points Guy (TPG), NerdWallet, Bankrate. Extract current cents-per-point (cpp) values for:
+1. **Points valuations by redemption method**: Web search for "credit card points valuations [current year]" from sources like The Points Guy (TPG), NerdWallet, Bankrate. For each program, research **3-4 redemption methods with their cpp values** (e.g., transfer to airline/hotel partners, travel portal, statement credit, Pay with Points). Extract per-method cpp for:
    - Amex Membership Rewards (MR)
    - Chase Ultimate Rewards (UR)
    - Capital One Miles
@@ -94,6 +94,59 @@ Store all research results for use in later phases. Note sources for citation in
 5. Flag foreign transactions (for FX fee analysis) — look for transactions with non-USD indicators or known foreign merchants
 6. Calculate annualized spending rates from the period analyzed
 
+#### 3a. Detect Redemption Methods
+
+Scan transactions and Gmail for signals of how the user redeems points in each rewards program. This determines which cpp value from Phase 1 to use.
+
+**Transactions (Hiro)** — scan for credits/negative amounts indicating redemptions:
+- Statement credits from issuer: merchant names like "AMEX REWARD", "CHASE CASHBACK REDEMPTION", "REWARDS REDEMPTION"
+- Travel portal charges: "AMEX TRAVEL", "CHASE TRAVEL", "CAPITAL ONE TRAVEL"
+- Pay with Points partial credits on retail purchases
+
+**Gmail (if not skipped)** — search for redemption-related emails:
+```bash
+gog gmail search 'subject:"points transfer" OR subject:"miles transfer" OR subject:"transfer confirmation" OR from:airline' --max 50
+gog gmail search 'subject:"travel booking" OR from:"amextravel" OR from:"chase travel"' --max 50
+gog gmail search 'subject:"rewards redemption" OR subject:"cashback" OR subject:"statement credit" from:amex OR from:chase' --max 50
+```
+
+**Detection logic per program:**
+
+| Signal | Inferred method |
+|--------|----------------|
+| Transfer confirmation emails to airline/hotel partners | Partner transfer |
+| Travel portal booking charges or emails | Travel portal |
+| Statement credit transactions | Statement credit |
+| No signals found | Unknown — ask user |
+
+Record: program, detected method (or "unknown"), evidence summary.
+
+#### 3b. Confirm Redemption Methods with User
+
+After detection, present findings and ask the user to confirm or correct — **one `AskUserQuestion` for all programs**. Pre-fill detected methods and only require input for unknowns. Skip programs with only one meaningful redemption option (pure cash-back cards).
+
+Example prompt:
+```
+Based on your transactions and emails, here's how you appear to redeem points.
+Please confirm or correct — this affects how we value your rewards.
+
+**Amex MR** — used by: Amex Gold, Amex Platinum
+  Detected: Transfer to airline partners (~2.0 cpp)
+  Evidence: Found 3 transfer confirmation emails to Delta SkyMiles
+  → Is this right? Other options: Travel portal (~1.0 cpp), Statement credit (~0.6 cpp)
+
+**Chase UR** — used by: Chase Sapphire Reserve
+  Detected: Could not determine
+  Options:
+  1. Transfer to airline/hotel partners (~1.8 cpp)
+  2. Chase Travel portal (~1.5 cpp via CSR)
+  3. Statement credit (~1.0 cpp)
+
+Reply with corrections or confirmations, e.g. "MR looks right, UR: 2"
+```
+
+Default to detected method (or highest-value if unknown) if user doesn't respond clearly.
+
 ### Phase 4: Optimization Analysis
 
 Using data from Phases 1-3, perform the following analyses:
@@ -103,7 +156,7 @@ For each card, calculate the effective earning rate using actual spending patter
 - Apply the card's category multipliers to actual category spending
 - Account for monthly/quarterly caps on bonus categories
 - Account for tiered rates where applicable
-- Convert points earned to dollar value using cpp from Phase 1
+- Convert points earned to dollar value using the redemption-specific cpp determined in Phase 3
 - Calculate: effective earning rate = (total points value earned) / (total spend)
 
 #### 4b. Spending Misallocations
@@ -169,7 +222,7 @@ mkdir -p "$OUTPUT_DIR"
 **analysis.md sections:**
 
 1. **Overview** — Date, analysis period, total spend across all cards, total annual fees, estimated annual savings opportunity
-2. **Points Valuations Used** — Table of program → cpp value with sources from web search
+2. **Points Valuations Used** — Table of program → redemption method → cpp value with source. Include how each method was determined (auto-detected from transactions/email vs. user-specified) and list alternative redemption options not chosen with their cpp values.
 3. **Card-by-Card Breakdown** — Table: Card Name | Annual Fee | Period Spend | Best Earning Rate | Effective Earning Rate | Status (Keep/Downgrade/Cancel/Evaluate)
 4. **Cards to Downgrade/Cancel** — For each: card name, current fee, savings from action, rationale, downgrade target (if applicable)
 5. **Cards to Evaluate** — For each: what needs checking and why it's a close call
@@ -209,7 +262,18 @@ The dashboard template expects this structure:
     "cardCount": 5
   },
   "pointsValuations": [
-    { "program": "Amex MR", "cpp": 2.0, "source": "TPG Mar 2026" }
+    {
+      "program": "Amex MR",
+      "cpp": 2.0,
+      "redemptionMethod": "Transfer to airline/hotel partners",
+      "detectedFrom": "Gmail: 3 transfer confirmations to Delta SkyMiles",
+      "source": "TPG Mar 2026",
+      "allOptions": [
+        { "method": "Transfer to airline/hotel partners", "cpp": 2.0 },
+        { "method": "Amex Travel portal", "cpp": 1.0 },
+        { "method": "Statement credit", "cpp": 0.6 }
+      ]
+    }
   ],
   "cards": [
     {
@@ -277,4 +341,5 @@ The dashboard template expects this structure:
 - **Paginate all Hiro API calls** — always check for cursor/next and fetch all pages
 - **Use current web data** — do not rely on embedded knowledge for points valuations or card benefits
 - **Be precise with numbers** — never round unless displaying summaries. Keep full precision in data.json
+- **Detect redemption methods before asking** — scan transactions for reward credits and Gmail for transfer/booking confirmations. Only ask the user to confirm or fill gaps. Critical because cpp varies 2-3x by redemption method.
 - **Cite sources** — include URLs or source names for all points valuations

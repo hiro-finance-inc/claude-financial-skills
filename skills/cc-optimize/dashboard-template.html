@@ -774,6 +774,47 @@ function renderActionItems() {
   );
 }
 
+function renderValuations() {
+  const vals = DATA.pointsValuations || [];
+  if (vals.length === 0) return null;
+
+  const tbody = $('tbody');
+  vals.forEach(v => {
+    const row = $('tr', null,
+      $('td', {style: {fontWeight: '600'}}, v.program),
+      $('td', null, v.redemptionMethod || '\u2014'),
+      $('td', {className: 'rate'}, v.cpp != null ? v.cpp.toFixed(1) + '\u00A2' : '\u2014'),
+      $('td', null, v.source || '\u2014')
+    );
+    if (v.detectedFrom) {
+      const subtitle = $('tr', null,
+        $('td', {colspan: '4', style: {fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '0', paddingBottom: '12px', borderBottom: '1px solid var(--border)'}}, v.detectedFrom)
+      );
+      tbody.appendChild(row);
+      tbody.appendChild(subtitle);
+    } else {
+      tbody.appendChild(row);
+    }
+  });
+
+  const thead = $('thead', null,
+    $('tr', null,
+      $('th', null, 'Program'),
+      $('th', null, 'Redemption Method'),
+      $('th', null, 'CPP'),
+      $('th', null, 'Source')
+    )
+  );
+
+  return $('div', {className: 'section'},
+    $('div', {className: 'section-divider'}, $('h2', null, 'Points Valuations')),
+    $('p', {className: 'section-subtitle'}, 'How your points are valued based on your redemption habits'),
+    $('div', {className: 'wallet-table'},
+      $('table', null, thead, tbody)
+    )
+  );
+}
+
 function renderFooter() {
   const p = DATA.period || {};
   const gen = DATA.generated ? new Date(DATA.generated).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}) : '';
@@ -787,6 +828,7 @@ function render() {
   const parts = [
     renderHeader(),
     renderHero(),
+    renderValuations(),
     renderCards(),
     renderMisallocations(),
     renderCredits(),
