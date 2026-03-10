@@ -20,30 +20,24 @@ Personal finance skills for [Claude Code](https://claude.com/claude-code) and [C
 - **[gog CLI](https://github.com/steipete/gogcli)** — Gmail integration for cc-optimize's fee/credit verification (skip with `--skip-gmail`)
 - **Python 3** with `yfinance`, `pandas`, `numpy`, `plotly` — required for drawdown-backtest
 
-## Installation
+## Install skills
 
-### As a plugin (recommended)
+1. **Set up the Hiro MCP server** (if not already done):
+   ```bash
+   claude mcp add --transport http hiro https://mcp.hirofinance.com
+   ```
+   See [hirofinance.com/mcp](https://hirofinance.com/mcp) for setup details.
 
-```bash
-# Install from GitHub
-claude plugin install github.com/hiro-finance-inc/claude-financial-skills
-```
+2. **Add skills** — copy any skills you want into your Claude skills directory:
+   ```bash
+   # All skills
+   git clone https://github.com/hiro-finance-inc/claude-financial-skills.git
+   cp -r claude-financial-skills/skills/* ~/.claude/skills/
 
-### Manual
-
-Clone and point Claude at the plugin directory:
-
-```bash
-git clone https://github.com/hiro-finance-inc/claude-financial-skills.git
-claude --plugin-dir ./claude-financial-skills
-```
-
-Or copy individual skills into your project:
-
-```bash
-cp -r claude-financial-skills/skills/cc-optimize .claude/skills/
-cp -r claude-financial-skills/skills/drawdown-backtest .claude/skills/
-```
+   # Or just one skill
+   cp -r claude-financial-skills/skills/cc-optimize ~/.claude/skills/
+   cp -r claude-financial-skills/skills/drawdown-backtest ~/.claude/skills/
+   ```
 
 ## Usage
 
