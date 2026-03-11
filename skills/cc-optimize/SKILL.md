@@ -2,7 +2,7 @@
 name: cc-optimize
 description: Analyzes credit card portfolio using Hiro transaction data and Gmail, identifies savings opportunities, and produces a markdown analysis + interactive HTML dashboard.
 argument-hint: "[--months N] [--skip-dashboard] [--skip-gmail]"
-allowed-tools: Bash(gog *), Bash(open *), Bash(mkdir *), Bash(cp *), Read, Write, Edit, Glob, Grep, WebSearch, AskUserQuestion, mcp__hiro__list_transactions, mcp__hiro__list_accounts, mcp__hiro__list_categories, mcp__hiro__get_account
+allowed-tools: Bash(cat *), Bash(gog *), Bash(open *), Bash(mkdir *), Bash(cp *), Read, Write, Edit, Glob, Grep, WebSearch, AskUserQuestion, mcp__hiro__list_transactions, mcp__hiro__list_accounts, mcp__hiro__list_categories, mcp__hiro__get_account
 ---
 
 # CC Optimize
