@@ -6,8 +6,8 @@ Personal finance skills for [Claude Code](https://claude.com/claude-code) and [C
 
 | Skill | Description | Hiro MCP Tools Used |
 |-------|-------------|---------------------|
-| **cc-optimize** | Analyzes your credit card portfolio, identifies spending misallocations, and generates an interactive optimization dashboard | `list_accounts`, `list_transactions`, `list_categories`, `get_account` |
-| **drawdown-backtest** | Backtests your portfolio against major market crises (dot-com, GFC, COVID) with interactive charts | `list_accounts`, `list_holdings`, `list_securities`, `get_security`, `get_holding` |
+| **[cc-optimize](skills/cc-optimize/)** | Analyzes your credit card portfolio, identifies spending misallocations, and generates an interactive optimization dashboard | `list_accounts`, `list_transactions`, `list_categories`, `get_account` |
+| **[drawdown-backtest](skills/drawdown-backtest/)** | Backtests your portfolio against major market crises (dot-com, GFC, COVID) with interactive charts | `list_accounts`, `list_holdings`, `list_securities`, `get_security`, `get_holding` |
 
 ## Prerequisites
 
