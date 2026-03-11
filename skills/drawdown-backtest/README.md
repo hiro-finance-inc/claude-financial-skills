@@ -1,12 +1,12 @@
-## Disclaimer
+# Disclaimer
 
 This tool is for informational and educational purposes only. It is not investment advice, and should not be used as the basis for any financial decisions. Past performance — real or simulated — does not guarantee future results. Consult a qualified financial advisor before making changes to your portfolio.
+
+![Dashboard example showing summary table and drawdown curves](dashboard-example.png)
 
 # Drawdown Backtest
 
 Backtests your current portfolio against major market crises — the dot-com bubble (2000–2003), the 2008 Global Financial Crisis (2007–2009), and the COVID crash (2020) — to see how it would have performed during each downturn.
-
-![Dashboard example showing summary table and drawdown curves](dashboard-example.png)
 
 ## Usage
 
