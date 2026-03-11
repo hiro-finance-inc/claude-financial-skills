@@ -1,8 +1,8 @@
+![Dashboard example showing summary table and drawdown curves](dashboard-example.png)
+
 # Disclaimer
 
 This tool is for informational and educational purposes only. It is not investment advice, and should not be used as the basis for any financial decisions. Past performance — real or simulated — does not guarantee future results. Consult a qualified financial advisor before making changes to your portfolio.
-
-![Dashboard example showing summary table and drawdown curves](dashboard-example.png)
 
 # Drawdown Backtest
 
